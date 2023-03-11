@@ -3,6 +3,13 @@
 # This software is licensed under the terms of the Monodepth2 licence
 # which allows for non-commercial use only, the full terms of which are made
 # available in the LICENSE file.
+import json
+
+import numpy as np
+import torch
+from torchvision import transforms
+
+import PIL.Image as pil
 
 
 def readlines(filename):
@@ -40,3 +47,31 @@ def sec_to_hm_str(t):
     """
     h, m, s = sec_to_hm(t)
     return "{:02d}h{:02d}m{:02d}s".format(h, m, s)
+
+
+def load_and_preprocess_image(image_path, resize_width, resize_height):
+    image = pil.open(image_path).convert('RGB')
+    original_width, original_height = image.size
+    image = image.resize((resize_width, resize_height), pil.LANCZOS)
+    image = transforms.ToTensor()(image).unsqueeze(0)
+    if torch.cuda.is_available():
+        return image.cuda(), (original_height, original_width)
+    return image, (original_height, original_width)
+
+
+def load_and_preprocess_intrinsics(intrinsics_path, resize_width, resize_height):
+    K = np.eye(4)
+    with open(intrinsics_path, 'r') as f:
+        K[:3, :3] = np.array(json.load(f))
+
+    # Convert normalised intrinsics to 1/4 size unnormalised intrinsics.
+    # (The cost volume construction expects the intrinsics corresponding to 1/4 size images)
+    K[0, :] *= resize_width // 4
+    K[1, :] *= resize_height // 4
+
+    invK = torch.Tensor(np.linalg.pinv(K)).unsqueeze(0)
+    K = torch.Tensor(K).unsqueeze(0)
+
+    if torch.cuda.is_available():
+        return K.cuda(), invK.cuda()
+    return K, invK

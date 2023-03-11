@@ -6,8 +6,12 @@
 import torch
 import random
 import numpy as np
-from .trainer import Trainer
-from .options import MonodepthOptions
+import os, sys
+
+sys.path.append(os.getcwd())
+
+from trainer import Trainer
+from options import MonodepthOptions
 
 
 def seed_all(seed):

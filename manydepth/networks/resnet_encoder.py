@@ -11,12 +11,13 @@ os.environ["OMP_NUM_THREADS"] = "1"  # noqa F402
 
 import numpy as np
 
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 import torch.utils.model_zoo as model_zoo
-from manydepth.layers import BackprojectDepth, Project3D
+from layers import BackprojectDepth, Project3D
 
 
 class ResNetMultiImageInput(models.ResNet):

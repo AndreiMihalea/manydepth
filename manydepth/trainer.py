@@ -21,11 +21,14 @@ from tensorboardX import SummaryWriter
 
 import json
 
-from .utils import readlines, sec_to_hm_str
-from .layers import SSIM, BackprojectDepth, Project3D, transformation_from_parameters, \
+import os, sys
+sys.path.append(os.getcwd())
+
+from utils import readlines, sec_to_hm_str
+from layers import SSIM, BackprojectDepth, Project3D, transformation_from_parameters, \
     disp_to_depth, get_smooth_loss, compute_depth_errors
 
-from manydepth import datasets, networks
+import datasets, networks
 import matplotlib.pyplot as plt
 
 
@@ -139,12 +142,13 @@ class Trainer:
         # DATA
         datasets_dict = {"kitti": datasets.KITTIRAWDataset,
                          "cityscapes_preprocessed": datasets.CityscapesPreprocessedDataset,
-                         "kitti_odom": datasets.KITTIOdomDataset}
+                         "kitti_odom": datasets.KITTIOdomDataset,
+                         "upb": datasets.UPBDataset}
         self.dataset = datasets_dict[self.opt.dataset]
 
-        fpath = os.path.join("splits", self.opt.split, "{}_files.txt")
-        train_filenames = readlines(fpath.format("train"))
-        val_filenames = readlines(fpath.format("val"))
+        fpath = os.path.join(self.opt.split, "{}.txt")
+        train_filenames = readlines(fpath.format("train_half"))
+        val_filenames = readlines(fpath.format("val_half"))
         img_ext = '.png' if self.opt.png else '.jpg'
 
         num_train_samples = len(train_filenames)

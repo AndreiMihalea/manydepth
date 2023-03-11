@@ -16,6 +16,7 @@ import torch
 from torchvision import transforms
 
 from manydepth import networks
+from manydepth.utils import load_and_preprocess_image, load_and_preprocess_intrinsics
 from .layers import transformation_from_parameters
 
 
@@ -37,34 +38,6 @@ def parse_args():
                              'the source image, e.g. as described in Table 5 of the paper.',
                         required=False)
     return parser.parse_args()
-
-
-def load_and_preprocess_image(image_path, resize_width, resize_height):
-    image = pil.open(image_path).convert('RGB')
-    original_width, original_height = image.size
-    image = image.resize((resize_width, resize_height), pil.LANCZOS)
-    image = transforms.ToTensor()(image).unsqueeze(0)
-    if torch.cuda.is_available():
-        return image.cuda(), (original_height, original_width)
-    return image, (original_height, original_width)
-
-
-def load_and_preprocess_intrinsics(intrinsics_path, resize_width, resize_height):
-    K = np.eye(4)
-    with open(intrinsics_path, 'r') as f:
-        K[:3, :3] = np.array(json.load(f))
-
-    # Convert normalised intrinsics to 1/4 size unnormalised intrinsics.
-    # (The cost volume construction expects the intrinsics corresponding to 1/4 size images)
-    K[0, :] *= resize_width // 4
-    K[1, :] *= resize_height // 4
-
-    invK = torch.Tensor(np.linalg.pinv(K)).unsqueeze(0)
-    K = torch.Tensor(K).unsqueeze(0)
-
-    if torch.cuda.is_available():
-        return K.cuda(), invK.cuda()
-    return K, invK
 
 
 def test_simple(args):
