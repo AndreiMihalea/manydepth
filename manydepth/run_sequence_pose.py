@@ -76,8 +76,10 @@ def main():
 
     if not os.path.exists(os.path.join(args.save_path, 'self_supervised_labels')):
         os.makedirs(os.path.join(args.save_path, 'self_supervised_labels'))
-        if not os.path.exists(os.path.join(args.save_path, 'splits')):
-            os.makedirs(os.path.join(args.save_path, 'splits'))
+    if not os.path.exists(os.path.join(args.save_path, 'splits')):
+        os.makedirs(os.path.join(args.save_path, 'splits'))
+    if not os.path.exists(os.path.join(args.save_path, 'images')):
+        os.makedirs(os.path.join(args.save_path, 'images'))
 
     train_split_path = os.path.join(args.dataset_path, 'splits', 'train_half.txt')
     val_split_path = os.path.join(args.dataset_path, 'splits', 'val_half.txt')
@@ -156,7 +158,7 @@ def main():
 
                     overlay = cv2.drawContours(overlay, [pts], 0, (0, 255, 0), cv2.FILLED)
 
-                show_img = cv2.addWeighted(overlay, ALPHA, show_img, 1, 0)
+                # show_img = cv2.addWeighted(overlay, ALPHA, show_img, 1, 0)
 
                 overlay = overlay[:, :, 1]
                 overlay[overlay != 0] = 1
@@ -175,8 +177,10 @@ def main():
                 category = bisect.bisect_right(limits, sum_euler) - 1
 
                 relative_save_path = os.path.join('{}'.format(seq) + '_frame{0:06d}.png'.format(i))
-                save_path = os.path.join(args.save_path, 'self_supervised_labels', relative_save_path)
-                cv2.imwrite(save_path, overlay)
+                save_path_label = os.path.join(args.save_path, 'self_supervised_labels', relative_save_path)
+                save_path_image = os.path.join(args.save_path, 'images', relative_save_path)
+                cv2.imwrite(save_path_label, overlay)
+                cv2.imwrite(save_path_image, show_img)
                 f.write(f'{relative_save_path},{sum_euler}\n')
                 # print(save_path, sum_euler, category, overlay.shape)
 
