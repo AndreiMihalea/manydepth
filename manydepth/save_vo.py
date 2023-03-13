@@ -20,15 +20,12 @@ from layers import transformation_from_parameters
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Simple testing funtion for ManyDepth models.')
+        description='Simple testing function for ManyDepth models.')
 
     parser.add_argument('--dataset_path', type=str,
                         help='path to the dataset', required=True)
     parser.add_argument("--output_path", type=str,
                         help="Output directory for saving predictions in a big 3D numpy file")
-    parser.add_argument('--intrinsics_json_path', type=str,
-                        help='path to a json file containing a normalised 3x3 intrinsics matrix',
-                        required=True)
     parser.add_argument('--model_path', type=str,
                         help='path to a folder of weights to load', required=True)
     parser.add_argument('--mode', type=str, default='multi', choices=('multi', 'mono'),

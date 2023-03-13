@@ -44,7 +44,7 @@ class UPBDataset(MonoDataset):
 
         cam_data = np.loadtxt(cam_file)
         self.K = cam_data
-        self.K[0, :] /= 620
+        self.K[0, :] /= 640
         self.K[1, :] /= 288
         col = np.array([[0], [0], [0]])
         row = np.array([0, 0, 0, 1])
