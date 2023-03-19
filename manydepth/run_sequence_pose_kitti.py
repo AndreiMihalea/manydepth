@@ -29,14 +29,31 @@ LIMIT_1 = 10
 LIMIT_2 = 30
 
 
+def read_calib_file(filepath, cid=2):
+    """Read in a calibration file and parse into a dictionary."""
+    with open(filepath, 'r') as f:
+        C = f.readlines()
+
+    def parseLine(L, shape):
+        data = L.split()
+        data = np.array(data[1:]).reshape(shape).astype(np.float32)
+        return data
+
+    proj_c2p = parseLine(C[cid], shape=(3, 4))
+    proj_v2c = parseLine(C[-1], shape=(3, 4))
+    filler = np.array([0, 0, 0, 1]).reshape((1, 4))
+    proj_v2c = np.concatenate((proj_v2c, filler), axis=0)
+    return proj_c2p, proj_v2c
+
+
 def pose_mat2vec(mat):
-    """
+    '''
     Convert projection matrix to rotation.
     Args:
         mat: A transformation matrix -- [B, 3, 4]
     Returns:
         3DoF parameters in the order of rx, ry, rz -- [B, 3]
-    """
+    '''
     import math
     import numpy as np
 
@@ -96,11 +113,12 @@ def main():
         print(sequences)
         f = open(os.path.join(args.save_path, 'splits', split), 'w+')
         for seq in sequences:
-            if f"{seq}.txt" not in os.listdir(args.vo_dir_path):
+            print(seq, os.listdir(args.vo_dir_path))
+            if f'{seq}.image_2.txt' not in os.listdir(args.vo_dir_path):
                 continue
 
-            df = pd.read_csv(os.path.join(args.vo_dir_path, f"{seq}.txt"), sep=" ", header=None)
-            path = os.path.join(args.dataset_path, 'sequence_dataset', seq, "frame{0:06d}.png")
+            df = pd.read_csv(os.path.join(args.vo_dir_path, f'{seq}.image_2.txt'), sep=' ', header=None)
+            path = os.path.join(args.dataset_path, 'sequences', seq, 'image_2', '{0:06d}.png')
             pose = df.values.reshape((len(df), 3, 4))
 
             x = np.zeros((len(pose), 1, 4))
@@ -109,7 +127,8 @@ def main():
             pose = np.concatenate([pose, x], axis=1)
             pose[:, :, -1] *= 32.8
 
-            camera_matrix = np.loadtxt(os.path.join(args.dataset_path, 'sequence_dataset', seq, 'cam.txt')).astype(np.float32)
+            camera_matrix, _ = read_calib_file(os.path.join(args.dataset_path, 'sequences', seq, 'calib.txt'))
+            camera_matrix = camera_matrix[:3, :3]
             # camera_matrix[0, :] /= 620
             # camera_matrix[1, :] /= 288
             # print(camera_matrix)
