@@ -198,9 +198,11 @@ def main():
                 relative_save_path = os.path.join('{}'.format(seq) + '_frame{0:06d}.png'.format(i))
                 save_path_label = os.path.join(args.save_path, 'self_supervised_labels', relative_save_path)
                 save_path_image = os.path.join(args.save_path, 'images', relative_save_path)
-                # cv2.imwrite(save_path_label, overlay)
-                # cv2.imwrite(save_path_image, show_img)
-                # f.write(f'{relative_save_path},{sum_euler}\n')
+
+                # print(save_path_label, save_path_image, relative_save_path)
+                cv2.imwrite(save_path_label, overlay)
+                cv2.imwrite(save_path_image, show_img)
+                f.write(f'{relative_save_path},{sum_euler}\n')
                 # print(save_path, sum_euler, category, overlay.shape)
 
         f.close()
