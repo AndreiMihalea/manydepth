@@ -113,7 +113,6 @@ def main():
         print(sequences)
         f = open(os.path.join(args.save_path, 'splits', split), 'w+')
         for seq in sequences:
-            print(seq, os.listdir(args.vo_dir_path))
             if f'{seq}.image_2.txt' not in os.listdir(args.vo_dir_path):
                 continue
 
@@ -147,7 +146,7 @@ def main():
                 world_points_l = project_points_l.dot(crt_pose.transpose((0, 2, 1)))[0, 0]
                 world_points_r = project_points_r.dot(crt_pose.transpose((0, 2, 1)))[0, 0]
 
-                show_img = cv2.imread(path.format(i)).astype(np.float32) / 255.
+                show_img = cv2.imread(path.format(i))
 
                 world_points_show = np.concatenate([
                     world_points[:NUM_SHOW_POINTS][:, :3],
