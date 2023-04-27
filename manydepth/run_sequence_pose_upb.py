@@ -128,7 +128,9 @@ def main():
                 world_points_l = project_points_l.dot(crt_pose.transpose((0, 2, 1)))[0, 0]
                 world_points_r = project_points_r.dot(crt_pose.transpose((0, 2, 1)))[0, 0]
 
-                show_img = cv2.imread(path.format(i)).astype(np.float32) / 255.
+                show_img = cv2.imread(path.format(i))
+                print(path.format(i), type(show_img))
+                show_img_float = show_img.astype(np.float32) / 255.
 
                 world_points_show = np.concatenate([
                     world_points[:NUM_SHOW_POINTS][:, :3],
@@ -146,7 +148,7 @@ def main():
                 show_points = show_points.astype(np.int)[:, 0]
                 show_points_l = show_points_l.astype(np.int)[:, 0]
                 show_points_r = show_points_r.astype(np.int)[:, 0]
-                overlay = np.zeros_like(show_img)
+                overlay = np.zeros_like(show_img_float)
 
                 for it, p1, p2, p3, p4 in zip(range(len(show_points_l) - 1), show_points_l[:-1], show_points_r[:-1],
                                               show_points_l[1:], show_points_r[1:]):

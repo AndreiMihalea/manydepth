@@ -147,8 +147,8 @@ class Trainer:
         self.dataset = datasets_dict[self.opt.dataset]
 
         fpath = os.path.join(self.opt.split, "{}.txt")
-        train_filenames = readlines(fpath.format("train_half"))
-        val_filenames = readlines(fpath.format("val_half"))
+        train_filenames = readlines(fpath.format("train"))
+        val_filenames = readlines(fpath.format("val"))
         img_ext = '.png' if self.opt.png else '.jpg'
 
         num_train_samples = len(train_filenames)

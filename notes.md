@@ -1,0 +1,3 @@
+After training the manydepth network, scaling estimation can be done using the `scaling_factor_estimation.py` script. It has to be run for both `upb` and `kitti` datasets before being given as argument to `run_sequence_pose_upb.py` and `run_sequence_pose_kitti.py`, respectively. 
+
+The current scaling factor for `kitti` is `30.51`, which is the one obtained with the model trained on the final split by randomly sampling 200 results from the whole dataset (kitti_half_split_cityscapes_pretrained - epoch 70/100).
