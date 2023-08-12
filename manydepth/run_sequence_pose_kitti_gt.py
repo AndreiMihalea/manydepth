@@ -129,7 +129,8 @@ def main():
         fds[data_split.split('.')[0]] = open(os.path.join(args.save_path, 'splits', data_split), 'w+')
 
     for seq in sequences:
-        df = pd.read_csv(os.path.join(args.vo_dir_path, f'{seq}.image_2.txt'), sep=' ', header=None)
+        print(os.path.join(args.vo_dir_path, f'{seq}.txt'))
+        df = pd.read_csv(os.path.join(args.vo_dir_path, f'{seq}.txt'), sep=' ', header=None)
         path = os.path.join(args.dataset_path, 'sequences', seq, 'image_2', '{0:06d}.png')
         pose = df.values.reshape((len(df), 3, 4))
 
@@ -137,7 +138,7 @@ def main():
         x[:, :, -1] = 1
 
         pose = np.concatenate([pose, x], axis=1)
-        pose[:, :, -1] *= args.scaling_factor
+        # pose[:, :, -1] *= args.scaling_factor
 
         camera_matrix, _ = read_calib_file(os.path.join(args.dataset_path, 'sequences', seq, 'calib.txt'))
         camera_matrix = camera_matrix[:3, :3]
@@ -197,7 +198,8 @@ def main():
             # cv2.imshow('img', overlay)
             # cv2.waitKey(0)
 
-            # sum_euler accumulates the differences between the y rotations of two adjacent poses along a trajectory
+            # sum_euler accumulates ALzi49NaR%3b
+            # differences between the y rotations of two adjacent poses along a trajectory
             sum_euler = np.zeros(3)
             for p1, p2 in zip(pose[i:i + num_show_points], pose[i + 1:i + num_show_points + 1]):
                 relative_pose = np.linalg.inv(p1).dot(p2)
