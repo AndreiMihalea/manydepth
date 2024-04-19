@@ -75,3 +75,49 @@ def load_and_preprocess_intrinsics(intrinsics_path, resize_width, resize_height)
     if torch.cuda.is_available():
         return K.cuda(), invK.cuda()
     return K, invK
+
+
+def read_calib_file(filepath, cid=2):
+    """Read in a calibration file and parse into a dictionary."""
+    with open(filepath, 'r') as f:
+        C = f.readlines()
+
+    def parseLine(L, shape):
+        data = L.split()
+        data = np.array(data[1:]).reshape(shape).astype(np.float32)
+        return data
+
+    proj_c2p = parseLine(C[cid], shape=(3, 4))
+    proj_v2c = parseLine(C[-1], shape=(3, 4))
+    filler = np.array([0, 0, 0, 1]).reshape((1, 4))
+    proj_v2c = np.concatenate((proj_v2c, filler), axis=0)
+    return proj_c2p, proj_v2c
+
+
+def pose_mat2vec(mat):
+    '''
+    Convert projection matrix to rotation.
+    Args:
+        mat: A transformation matrix -- [B, 3, 4]
+    Returns:
+        3DoF parameters in the order of rx, ry, rz -- [B, 3]
+    '''
+    import math
+    import numpy as np
+
+    mat33 = mat[:, :3, :3]
+    R = mat33[0]
+    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+
+    singular = sy < 1e-6
+
+    if not singular:
+        x = math.atan2(R[2, 1], R[2, 2])
+        y = math.atan2(-R[2, 0], sy)
+        z = math.atan2(R[1, 0], R[0, 0])
+    else:
+        x = math.atan2(-R[1, 2], R[1, 1])
+        y = math.atan2(-R[2, 0], sy)
+        z = 0
+
+    return np.array([x, y, z])

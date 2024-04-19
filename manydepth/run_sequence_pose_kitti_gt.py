@@ -15,7 +15,8 @@ import torch
 from torchvision import transforms
 from tqdm import tqdm
 
-from utils import load_and_preprocess_intrinsics, load_and_preprocess_image
+from manydepth.kitti_utils import read_calib_file
+from utils import load_and_preprocess_intrinsics, load_and_preprocess_image, pose_mat2vec
 
 sys.path.append(os.getcwd())
 
@@ -26,52 +27,6 @@ from layers import transformation_from_parameters
 ALPHA = 1.
 LIMIT_1 = 10
 LIMIT_2 = 30
-
-
-def read_calib_file(filepath, cid=2):
-    """Read in a calibration file and parse into a dictionary."""
-    with open(filepath, 'r') as f:
-        C = f.readlines()
-
-    def parseLine(L, shape):
-        data = L.split()
-        data = np.array(data[1:]).reshape(shape).astype(np.float32)
-        return data
-
-    proj_c2p = parseLine(C[cid], shape=(3, 4))
-    proj_v2c = parseLine(C[-1], shape=(3, 4))
-    filler = np.array([0, 0, 0, 1]).reshape((1, 4))
-    proj_v2c = np.concatenate((proj_v2c, filler), axis=0)
-    return proj_c2p, proj_v2c
-
-
-def pose_mat2vec(mat):
-    '''
-    Convert projection matrix to rotation.
-    Args:
-        mat: A transformation matrix -- [B, 3, 4]
-    Returns:
-        3DoF parameters in the order of rx, ry, rz -- [B, 3]
-    '''
-    import math
-    import numpy as np
-
-    mat33 = mat[:, :3, :3]
-    R = mat33[0]
-    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
-
-    singular = sy < 1e-6
-
-    if not singular:
-        x = math.atan2(R[2, 1], R[2, 2])
-        y = math.atan2(-R[2, 0], sy)
-        z = math.atan2(R[1, 0], R[0, 0])
-    else:
-        x = math.atan2(-R[1, 2], R[1, 1])
-        y = math.atan2(-R[2, 0], sy)
-        z = 0
-
-    return np.array([x, y, z])
 
 
 def parse_args():
@@ -180,52 +135,55 @@ def main():
             show_points_r = show_points_r.astype(np.int)[:, 0]
             overlay = np.zeros_like(show_img)
 
-            for it, p1, p2, p3, p4 in zip(range(len(show_points_l) - 1), show_points_l[:-1], show_points_r[:-1],
-                                          show_points_l[1:], show_points_r[1:]):
-                x1, y1 = p1
-                x2, y2 = p2
-                x3, y3 = p3
-                x4, y4 = p4
-                pts = np.array([(x1, y1), (x3, y3), (x4, y4), (x2, y2)])
+            try:
+                for it, p1, p2, p3, p4 in zip(range(len(show_points_l) - 1), show_points_l[:-1], show_points_r[:-1],
+                                              show_points_l[1:], show_points_r[1:]):
+                    x1, y1 = p1
+                    x2, y2 = p2
+                    x3, y3 = p3
+                    x4, y4 = p4
+                    pts = np.array([(x1, y1), (x3, y3), (x4, y4), (x2, y2)])
 
-                overlay = cv2.drawContours(overlay, [pts], 0, (0, 255, 0), cv2.FILLED)
+                    overlay = cv2.drawContours(overlay, [pts], 0, (0, 255, 0), cv2.FILLED)
 
-            # show_img = cv2.addWeighted(overlay, ALPHA, show_img, 1, 0)
+                # show_img = cv2.addWeighted(overlay, ALPHA, show_img, 1, 0)
 
-            overlay = overlay[:, :, 1]
-            overlay[overlay != 0] = 1
+                overlay = overlay[:, :, 1]
+                overlay[overlay != 0] = 1
 
-            # cv2.imshow('img', overlay)
-            # cv2.waitKey(0)
+                # cv2.imshow('img', overlay)
+                # cv2.waitKey(0)
 
-            # sum_euler accumulates ALzi49NaR%3b
-            # differences between the y rotations of two adjacent poses along a trajectory
-            sum_euler = np.zeros(3)
-            for p1, p2 in zip(pose[i:i + num_show_points], pose[i + 1:i + num_show_points + 1]):
+                # sum_euler accumulates ALzi49NaR%3b
+                # differences between the y rotations of two adjacent poses along a trajectory
+                sum_euler = np.zeros(3)
+                for p1, p2 in zip(pose[i:i + num_show_points], pose[i + 1:i + num_show_points + 1]):
+                    relative_pose = np.linalg.inv(p1).dot(p2)
+                    relative_pose = relative_pose.reshape((1, 4, 4))
+                    sum_euler += (pose_mat2vec(relative_pose) * 180 / np.pi)
+                sum_euler = sum_euler[1]
+
+                # diff_euler calculates the difference in y rotations between the last and first points of a trajectory
+                p1 = pose[i]
+                p2 = pose[i:i + num_show_points + 1][-1]
                 relative_pose = np.linalg.inv(p1).dot(p2)
                 relative_pose = relative_pose.reshape((1, 4, 4))
-                sum_euler += (pose_mat2vec(relative_pose) * 180 / np.pi)
-            sum_euler = sum_euler[1]
+                diff_euler = (pose_mat2vec(relative_pose) * 180 / np.pi)[1]
 
-            # diff_euler calculates the difference in y rotations between the last and first points of a trajectory
-            p1 = pose[i]
-            p2 = pose[i:i + num_show_points + 1][-1]
-            relative_pose = np.linalg.inv(p1).dot(p2)
-            relative_pose = relative_pose.reshape((1, 4, 4))
-            diff_euler = (pose_mat2vec(relative_pose) * 180 / np.pi)
+                limits = [-float('inf'), -LIMIT_2, -LIMIT_1, LIMIT_1, LIMIT_2, float('inf')]
+                category = bisect.bisect_right(limits, sum_euler) - 1
 
-            limits = [-float('inf'), -LIMIT_2, -LIMIT_1, LIMIT_1, LIMIT_2, float('inf')]
-            category = bisect.bisect_right(limits, sum_euler) - 1
+                relative_save_path = os.path.join('{}'.format(seq) + '_frame{0:06d}.png'.format(i))
+                save_path_label = os.path.join(args.save_path, supervised_labels_path, relative_save_path)
+                save_path_image = os.path.join(args.save_path, 'images', relative_save_path)
 
-            relative_save_path = os.path.join('{}'.format(seq) + '_frame{0:06d}.png'.format(i))
-            save_path_label = os.path.join(args.save_path, supervised_labels_path, relative_save_path)
-            save_path_image = os.path.join(args.save_path, 'images', relative_save_path)
+                # print(save_path_image, save_path_label)
 
-            # print(save_path_image, save_path_label)
-
-            # cv2.imwrite(save_path_label, overlay)
-            # cv2.imwrite(save_path_image, show_img)
-            fds[all_files[f'{int(seq)} {i}']].write(f'{relative_save_path},{sum_euler},{diff_euler}\n')
+                # cv2.imwrite(save_path_label, overlay)
+                # cv2.imwrite(save_path_image, show_img)
+                fds[all_files[f'{int(seq)} {i}']].write(f'{relative_save_path},{sum_euler},{diff_euler}\n')
+            except:
+                continue
 
     for fd in fds:
         fds[fd].close()

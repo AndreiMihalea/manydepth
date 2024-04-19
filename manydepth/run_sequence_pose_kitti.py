@@ -12,10 +12,14 @@ import matplotlib.cm as cm
 import pandas as pd
 
 import torch
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib import pyplot as plt
+from numpy.linalg import inv
 from torchvision import transforms
 from tqdm import tqdm
 
-from utils import load_and_preprocess_intrinsics, load_and_preprocess_image
+from utils import load_and_preprocess_intrinsics, load_and_preprocess_image, pose_mat2vec, read_calib_file
 
 sys.path.append(os.getcwd())
 
@@ -28,52 +32,6 @@ LIMIT_1 = 10
 LIMIT_2 = 30
 
 
-def read_calib_file(filepath, cid=2):
-    """Read in a calibration file and parse into a dictionary."""
-    with open(filepath, 'r') as f:
-        C = f.readlines()
-
-    def parseLine(L, shape):
-        data = L.split()
-        data = np.array(data[1:]).reshape(shape).astype(np.float32)
-        return data
-
-    proj_c2p = parseLine(C[cid], shape=(3, 4))
-    proj_v2c = parseLine(C[-1], shape=(3, 4))
-    filler = np.array([0, 0, 0, 1]).reshape((1, 4))
-    proj_v2c = np.concatenate((proj_v2c, filler), axis=0)
-    return proj_c2p, proj_v2c
-
-
-def pose_mat2vec(mat):
-    '''
-    Convert projection matrix to rotation.
-    Args:
-        mat: A transformation matrix -- [B, 3, 4]
-    Returns:
-        3DoF parameters in the order of rx, ry, rz -- [B, 3]
-    '''
-    import math
-    import numpy as np
-
-    mat33 = mat[:, :3, :3]
-    R = mat33[0]
-    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
-
-    singular = sy < 1e-6
-
-    if not singular:
-        x = math.atan2(R[2, 1], R[2, 2])
-        y = math.atan2(-R[2, 0], sy)
-        z = math.atan2(R[1, 0], R[0, 0])
-    else:
-        x = math.atan2(-R[1, 2], R[1, 1])
-        y = math.atan2(-R[2, 0], sy)
-        z = 0
-
-    return np.array([x, y, z])
-
-
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Simple testing funtion for ManyDepth models.')
@@ -83,6 +41,8 @@ def parse_args():
     parser.add_argument('--save_path', type=str,
                         help='path to save the segmentation dataset', required=True)
     parser.add_argument('--vo_dir_path', type=str,
+                        help='path to vo results dir', required=True)
+    parser.add_argument('--gt_vo_dir_path', type=str,
                         help='path to vo results dir', required=True)
     parser.add_argument('--num_show_points', type=int,
                         help='number of points to show in the trajectory', default=70)
@@ -121,14 +81,16 @@ def main():
     # print(all_files)
 
     sequences = os.listdir(args.vo_dir_path)
-    sequences = set([seq.split('.')[0] for seq in sequences])
+    sequences = sorted(set([seq.split('.')[0] for seq in sequences]))
 
     fds = {}
 
     for data_split in [f'train_{num_show_points}.txt', f'val_{num_show_points}.txt', f'test_{num_show_points}.txt']:
         fds[data_split.split('.')[0]] = open(os.path.join(args.save_path, 'splits', data_split), 'w+')
 
-    for seq in sequences:
+    TRAJECTORY_POINTS = 200
+
+    for seq in sequences[9:10]:
         df = pd.read_csv(os.path.join(args.vo_dir_path, f'{seq}.image_2.txt'), sep=' ', header=None)
         path = os.path.join(args.dataset_path, 'sequences', seq, 'image_2', '{0:06d}.png')
         pose = df.values.reshape((len(df), 3, 4))
@@ -152,6 +114,47 @@ def main():
         project_points_l = np.array([[-0.8, 1.65, 1.68, 1]]).reshape((1, 1, 4))
         project_points_r = np.array([[+0.8, 1.65, 1.68, 1]]).reshape((1, 1, 4))
 
+        # if os.path.exists(os.path.join(args.gt_vo_dir_path, f'{seq}.txt')):
+        #     gt_df = pd.read_csv(os.path.join(args.gt_vo_dir_path, f'{seq}.txt'), sep=' ', header=None)
+        #     gt_path = os.path.join(args.dataset_path, 'sequences', seq, 'image_2', '{0:06d}.png')
+        #     gt_pose = gt_df.values.reshape((len(gt_df), 3, 4))
+        #
+        #     gt_pose = np.concatenate([gt_pose, x], axis=1)
+        #
+        #     crt_pose = np.stack(inv(pose[0]).dot(x) for x in pose[1:TRAJECTORY_POINTS])
+        #     world_points = project_points.dot(crt_pose.transpose((0, 2, 1)))[0, 0]
+        #
+        #     x = world_points[:, 0]
+        #     y = world_points[:, 2]
+        #
+        #     gt_crt_pose = np.stack(inv(gt_pose[0]).dot(x) for x in gt_pose[1:TRAJECTORY_POINTS])
+        #     gt_world_points = project_points.dot(gt_crt_pose.transpose((0, 2, 1)))[0, 0]
+        #
+        #     gt_x = gt_world_points[:, 0]
+        #     gt_y = gt_world_points[:, 2]
+        #
+        #     plt.xlabel("x (m)")
+        #     plt.ylabel("z (m)")
+        #     plt.plot(x, y, label='Predicted trajectory', linewidth=2, color='red')
+        #     plt.plot(gt_x, gt_y, label='Ground truth trajectory', linewidth=2, color='green')
+        #     plt.title('Trajectory')
+        #     # plt.legend()
+        #     # plt.savefig('results/scaling_factor/map_sf_minimizers.png')
+        #
+        #     for num_points in range(2, TRAJECTORY_POINTS + 1):
+        #         crt_pose = np.stack(inv(pose[0]).dot(x) for x in pose[1:num_points])
+        #         world_points = project_points.dot(crt_pose.transpose((0, 2, 1)))[0, 0]
+        #
+        #         x = world_points[:, 0]
+        #         y = world_points[:, 2]
+        #
+        #         plt.plot(x, y, label='Current predicted trajectory', linewidth=3, color='blue')
+        #         if num_points == 2:
+        #             plt.legend()
+        #         plt.savefig(f'results/synasc_presentation/path_{num_points}.png')
+        #
+        #     break
+
         for i in tqdm(range(len(pose))):
             crt_pose = np.stack(np.linalg.inv(pose[i]).dot(x) for x in pose[i:])
 
@@ -174,56 +177,79 @@ def main():
                                               camera_matrix, None)[0]
             show_points_r = cv2.projectPoints(world_points_r[:num_show_points][:, :3].astype(np.float64), rvec2, tvec,
                                               camera_matrix, None)[0]
-            show_points = show_points.astype(np.int)[:, 0]
-            show_points_l = show_points_l.astype(np.int)[:, 0]
-            show_points_r = show_points_r.astype(np.int)[:, 0]
+            show_points = show_points.astype(np.int64)[:, 0]
+            show_points_l = show_points_l.astype(np.int64)[:, 0]
+            show_points_r = show_points_r.astype(np.int64)[:, 0]
             overlay = np.zeros_like(show_img)
 
-            for it, p1, p2, p3, p4 in zip(range(len(show_points_l) - 1), show_points_l[:-1], show_points_r[:-1],
-                                          show_points_l[1:], show_points_r[1:]):
-                x1, y1 = p1
-                x2, y2 = p2
-                x3, y3 = p3
-                x4, y4 = p4
-                pts = np.array([(x1, y1), (x3, y3), (x4, y4), (x2, y2)])
+            show_img_points = np.copy(show_img)
 
-                overlay = cv2.drawContours(overlay, [pts], 0, (0, 255, 0), cv2.FILLED)
+            try:
+                for it, p1, p2 in zip(range(len(show_points_l)), show_points_l, show_points_r):
+                    x1, y1 = p1
+                    x2, y2 = p2
 
-            # show_img = cv2.addWeighted(overlay, ALPHA, show_img, 1, 0)
+                    cv2.circle(show_img_points, (x1, y1), 5, (0, 255, 0), -1)
+                    cv2.circle(show_img_points, (x2, y2), 5, (0, 255, 0), -1)
 
-            overlay = overlay[:, :, 1]
-            overlay[overlay != 0] = 1
+                    # cv2.imshow('img', show_img_points)
+                    # cv2.waitKey(0)
 
-            # cv2.imshow('img', overlay)
-            # cv2.waitKey(0)
+                    cv2.imwrite(f'results/synasc_presentation/traj_{it}.png', show_img_points)
 
-            # sum_euler accumulates the differences between the y rotations of two adjacent poses along a trajectory
-            sum_euler = np.zeros(3)
-            for p1, p2 in zip(pose[i:i + num_show_points], pose[i + 1:i + num_show_points + 1]):
+                for it, p1, p2, p3, p4 in zip(range(len(show_points_l) - 1), show_points_l[:-1], show_points_r[:-1],
+                                              show_points_l[1:], show_points_r[1:]):
+                    x1, y1 = p1
+                    x2, y2 = p2
+                    x3, y3 = p3
+                    x4, y4 = p4
+                    pts = np.array([(x1, y1), (x3, y3), (x4, y4), (x2, y2)])
+
+                    overlay = cv2.drawContours(overlay, [pts], 0, (0, 255, 0), cv2.FILLED)
+
+                show_img[overlay != 0] //= 2
+                show_img = cv2.addWeighted(overlay, ALPHA, show_img, 1, 0.5)
+
+                overlay = overlay[:, :, 1]
+                overlay[overlay != 0] = 1
+
+                # cv2.imshow('img', show_img)
+                # cv2.waitKey(0)
+                img_name = 'results/synasc_presentation/full_traj.png'
+                cv2.imwrite(img_name, show_img)
+                break
+                # print(f'saved {img_name}')
+                # print(e)
+
+                # sum_euler accumulates the differences between the y rotations of two adjacent poses along a trajectory
+                sum_euler = np.zeros(3)
+                for p1, p2 in zip(pose[i:i + num_show_points], pose[i + 1:i + num_show_points + 1]):
+                    relative_pose = np.linalg.inv(p1).dot(p2)
+                    relative_pose = relative_pose.reshape((1, 4, 4))
+                    sum_euler += (pose_mat2vec(relative_pose) * 180 / np.pi)
+                sum_euler = sum_euler[1]
+
+                # diff_euler calculates the difference in y rotations between the last and first points of a trajectory
+                p1 = pose[i]
+                p2 = pose[i:i + num_show_points + 1][-1]
                 relative_pose = np.linalg.inv(p1).dot(p2)
                 relative_pose = relative_pose.reshape((1, 4, 4))
-                sum_euler += (pose_mat2vec(relative_pose) * 180 / np.pi)
-            sum_euler = sum_euler[1]
+                diff_euler = (pose_mat2vec(relative_pose) * 180 / np.pi)[1]
 
-            # diff_euler calculates the difference in y rotations between the last and first points of a trajectory
-            p1 = pose[i]
-            p2 = pose[i:i + num_show_points + 1][-1]
-            relative_pose = np.linalg.inv(p1).dot(p2)
-            relative_pose = relative_pose.reshape((1, 4, 4))
-            diff_euler = (pose_mat2vec(relative_pose) * 180 / np.pi)
+                limits = [-float('inf'), -LIMIT_2, -LIMIT_1, LIMIT_1, LIMIT_2, float('inf')]
+                category = bisect.bisect_right(limits, sum_euler) - 1
 
-            limits = [-float('inf'), -LIMIT_2, -LIMIT_1, LIMIT_1, LIMIT_2, float('inf')]
-            category = bisect.bisect_right(limits, sum_euler) - 1
+                relative_save_path = os.path.join('{}'.format(seq) + '_frame{0:06d}.png'.format(i))
+                save_path_label = os.path.join(args.save_path, supervised_labels_path, relative_save_path)
+                save_path_image = os.path.join(args.save_path, 'images', relative_save_path)
 
-            relative_save_path = os.path.join('{}'.format(seq) + '_frame{0:06d}.png'.format(i))
-            save_path_label = os.path.join(args.save_path, supervised_labels_path, relative_save_path)
-            save_path_image = os.path.join(args.save_path, 'images', relative_save_path)
+                # print(save_path_image, save_path_label)
 
-            # print(save_path_image, save_path_label)
-
-            # cv2.imwrite(save_path_label, overlay)
-            # cv2.imwrite(save_path_image, show_img)
-            fds[all_files[f'{int(seq)} {i}']].write(f'{relative_save_path},{sum_euler},{diff_euler}\n')
+                # cv2.imwrite(save_path_label, overlay)
+                # cv2.imwrite(save_path_image, show_img)
+                # fds[all_files[f'{int(seq)} {i}']].write(f'{relative_save_path},{sum_euler},{diff_euler}\n')
+            except:
+                continue
 
     for fd in fds:
         fds[fd].close()

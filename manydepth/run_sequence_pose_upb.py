@@ -15,7 +15,7 @@ import torch
 from torchvision import transforms
 from tqdm import tqdm
 
-from utils import load_and_preprocess_intrinsics, load_and_preprocess_image
+from utils import load_and_preprocess_intrinsics, load_and_preprocess_image, pose_mat2vec
 
 sys.path.append(os.getcwd())
 
@@ -27,35 +27,6 @@ NUM_SHOW_POINTS = 70
 ALPHA = 1.
 LIMIT_1 = 10
 LIMIT_2 = 30
-
-
-def pose_mat2vec(mat):
-    """
-    Convert projection matrix to rotation.
-    Args:
-        mat: A transformation matrix -- [B, 3, 4]
-    Returns:
-        3DoF parameters in the order of rx, ry, rz -- [B, 3]
-    """
-    import math
-    import numpy as np
-
-    mat33 = mat[:, :3, :3]
-    R = mat33[0]
-    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
-
-    singular = sy < 1e-6
-
-    if not singular:
-        x = math.atan2(R[2, 1], R[2, 2])
-        y = math.atan2(-R[2, 0], sy)
-        z = math.atan2(R[1, 0], R[0, 0])
-    else:
-        x = math.atan2(-R[1, 2], R[1, 1])
-        y = math.atan2(-R[2, 0], sy)
-        z = 0
-
-    return np.array([x, y, z])
 
 
 def parse_args():
